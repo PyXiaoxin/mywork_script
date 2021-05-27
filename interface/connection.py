@@ -480,6 +480,4 @@ class logg:  # 日志模块
 
 
 if __name__ == '__main__':
-    # ip = 'XXX'
-    # username = 'XXX'
-    # password = 'XXX'
+    pass
