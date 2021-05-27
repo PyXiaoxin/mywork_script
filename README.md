@@ -1,5 +1,4 @@
 ## <center>工作中用到的脚本汇总</center>
-***
 ### 功能汇总：
 #### *connection*
 1. 交换机路由器SSH，telnet登录模块
