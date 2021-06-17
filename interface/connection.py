@@ -463,7 +463,7 @@ class logg:  # 日志模块
 
         # 创建一个handler，用于将日志输出到控制台
         ch = logging.StreamHandler()
-        ch.setLevel(logging.ERROR)
+        ch.setLevel(logging.INFO)
 
         # 定义handler的输出格式
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s:%(message)s',
