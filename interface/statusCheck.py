@@ -17,6 +17,18 @@ def pingCheck(host):  # ping 返回平均延迟,丢包
     return delayAvg, loss
 
 
+def resCheck(data):  # 结果检查，检查通过返回True
+    data_local = data
+    keyword_local = ['error']
+    for key in keyword_local:
+        match = re.search(r'%s' % key, data_local, re.I)
+        if match:
+            return False
+    return True
+
+
 if __name__ == '__main__':
-    ip = '192.168.1.254'
-    pingRes = pingCheck(ip)
+    # ip = '192.168.1.254'
+    # pingRes = pingCheck(ip)
+    datastr = 'zhiehu1k2312,12313 Error'
+    print(resCheck(datastr))
