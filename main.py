@@ -6,6 +6,7 @@ from interface.statusCheck import pingCheck
 import time, re, sys
 import concurrent.futures
 import threading
+import vthread
 
 
 def runStart(filename):
@@ -15,9 +16,9 @@ def runStart(filename):
     print(list_ex)
 
 
-def monitor_host(hosts, interval=5):  # 监控IP并写入日志
+def monitor_host(host, interval=5):  # 监控IP并写入日志
     # startTime = time.time()
-    monitor_log = logg(loggername='monitor', filename='monitor')
+    monitor_log = logg(loggername=host, filename='monitor_%s' % host)
     while True:
         try:
             delay, loss = pingCheck(host)
