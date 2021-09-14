@@ -28,7 +28,7 @@ def resCheck(data):  # 结果检查，检查通过返回True
 
 
 if __name__ == '__main__':
-    # ip = '192.168.1.254'
-    # pingRes = pingCheck(ip)
-    datastr = 'zhiehu1k2312,12313 Error'
-    print(resCheck(datastr))
+    ip = '192.168.1.254'
+    pingRes = pingCheck(ip)
+    # datastr = 'zhiehu1k2312,12313 Error'
+    # print(resCheck(datastr))

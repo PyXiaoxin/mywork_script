@@ -3,6 +3,7 @@
 
 from interface.connection import excel, logg
 from interface.statusCheck import pingCheck
+from interface.tipsFunctions import netSplit, listReset
 import time, re, sys
 import concurrent.futures
 import threading
@@ -60,9 +61,102 @@ def threading_action():  # 多线程入口
     print(result)
 
 
+def VlanifConfig(file):  # 构造vlanif配置
+    excel_obj = excel(file)
+    read_excel = excel_obj.excel_read(sheetnum=2)
+    result = ''
+    for row in read_excel:
+        match_row = str(row[1])
+        matchStr = re.search('vlan', match_row, re.I)
+        if matchStr:
+            vlanID = re.findall('\d+', match_row)[0]
+            VlanifInfo = '\ninterface Vlanif%s\n' % (vlanID)
+            for index, cellInfo in enumerate(row[2:]):  # 从第三列开始循环
+                if bool(cellInfo) == False:
+                    continue
+                cellSplit = str(cellInfo).split('/')
+                network = cellSplit[0].split('.')
+                network[-1] = str(int(network[-1]) + 1)
+                networStr = '.'.join(network)
+                if index == 0:
+                    VlanifInfo += 'ip address %s %s\n' % (networStr, cellSplit[1])
+                else:
+                    VlanifInfo += 'ip address %s %s sub\n' % (networStr, cellSplit[1])
+            result += VlanifInfo
+    timeNow = time.strftime('%Y%m%d%H%M%S', time.localtime(time.time()))
+    with open('config%s.txt' % timeNow, 'w') as file_w:
+        file_w.write(result)
+
+
+def VlanifConfigTemp(file):  # 构造vlanif配置 临时代码
+    excel_obj = excel(file)
+    read_excel = excel_obj.excel_read(sheetnum=2)
+    result = ''
+    for row in read_excel:
+        match_row = str(row[1])
+        matchStr = re.search('vlan', match_row, re.I)
+        if matchStr:
+            vlanID = re.findall('\d+', match_row)[0]
+            VlanifInfo = '\ninterface Vlanif%s\n dhcp select relay \n dhcp relay server-ip 154.92.99.252\n' % (vlanID)
+            result += VlanifInfo
+    timeNow = time.strftime('%Y%m%d%H%M%S', time.localtime(time.time()))
+    with open('config%s.txt' % timeNow, 'w') as file_w:
+        file_w.write(result)
+
+
+def splitNetworkWriteToExcel():  # 网段划分
+    net = '192.168.192.0'
+    mask = 18
+    sub_mask1 = 24
+    sub_mask2 = 26
+    count_sub = 4
+    subnetList = netSplit(net, mask, sub_mask1)
+    subnetList = listReset(subnetList)
+    excel_list = []  # 划分之后的子网段集
+    for cell in subnetList:
+        excel_list.append([cell])
+    # print(excel_list)
+    excel_obj = excel('IP地址大段')
+    excel_obj.excel_write(title=['%s/%d' % (net, mask)], data=excel_list)
+    savename = excel_obj.save_file()
+
+    '''小网段24to27段排列'''
+    result_subList = []
+    excel_obj = excel(savename)
+    read_excel = excel_obj.excel_read(sheetnum=1)
+    for cell_sub in read_excel:
+        withoutMaskSplit = cell_sub[0].split('/')
+        result_subList.append(netSplit(withoutMaskSplit[0], int(withoutMaskSplit[1]), sub_mask2))
+
+    '''重新排序'''
+    num = 0
+    result_all = read_excel
+    for index, list_cell in enumerate(result_subList):
+        temp_cell = list_cell[:num]
+        del list_cell[:num]
+        list_cell.extend(temp_cell)
+        num += 1
+        if num == count_sub - 1:
+            num = 0
+        result_all[index].extend(list_cell)
+    # print(result_all)
+    '''写入excel'''
+    excel_w = excel('IP地址细化')
+    excel_w.excel_write(title=['%s/%d' % (net, mask)], data=result_all)
+    excel_w.save_file()
+
+
 if __name__ == '__main__':
-    cmd_key = sys.argv
-    host = sys.argv[1]
-    interval = int(sys.argv[2])
-    monitor_host(host, interval)
-    # print(time.time())
+    # cmd_key = sys.argv
+    # host = sys.argv[1]
+    # interval = int(sys.argv[2])
+    # monitor_host(host, interval)
+    # # # print(time.time())
+    # file = 'IP划分更新后new.xlsx'
+    # VlanifConfigTemp(file)
+    splitNetworkWriteToExcel()
+    # a = [1, 2, 3, 4, 5]
+    # b = a[:2]
+    # del a[:2]
+    # a.extend(b)
+    # print(a)
