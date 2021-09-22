@@ -80,7 +80,20 @@ class deviceControl:  # 交换机登陆模块
         except:
             pass
 
-    def connectLinux(self):  # 适用于连接F5/netscaler设备
+    def connectLinux(self):  # 连接Linux服务器
+        ssh = paramiko.SSHClient()
+        # 允许连接不在know_hosts文件中的主机
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        # 连接服务器
+        ssh.connect(hostname=self.ip, port=self.port, username=self.username, password=self.password)
+        # 执行命令
+        stdin, stdout, stderr = ssh.exec_command('df')
+        # 获取命令结果
+        res, err = stdout.read(), stderr.read()
+        result = res if res else err
+        return result.decode()
+
+    def connectOther(self):  # 适用于连接F5/netscaler设备
         try:
             self.t = paramiko.Transport(sock=(self.ip, 22))
             self.t.connect(username=self.username, password=self.password)
@@ -93,7 +106,7 @@ class deviceControl:  # 交换机登陆模块
             self.close()
             return False
 
-    def sendCmdLinux(self, cmd):  # 适用于F5/netscaler设备发送命令（PS:自带回车符），返回运行结果
+    def sendCmdOther(self, cmd):  # 适用于F5/netscaler设备发送命令（PS:自带回车符），返回运行结果
         cmd += '\n'  # 命令加上回车符
         result = ''
         self.chan.send(cmd)  # 发送要执行的命令

@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-from interface.connection import excel, logg
+from interface.connection import excel, logg, deviceControl, deviceControl_auto
 from interface.statusCheck import pingCheck
 from interface.tipsFunctions import netSplit, listReset
 import time, re, sys
@@ -10,11 +10,26 @@ import threading
 import vthread
 
 
-def runStart(filename):
-    filename_local = filename
-    excel_obj = excel(filename_local)
-    list_ex = excel_obj.excel_read()
-    print(list_ex)
+def runStart(args_ments):
+    username = args_ments[1]
+    password = args_ments[2]
+    ip = args_ments[0]
+    try:
+        cmds = args_ments[3].split(',')
+    except:
+        cmds = [args_ments[3]]
+    print(cmds)
+    res = [ip]  # 结果集
+    logIN = deviceControl_auto(ip, username, password)
+    try:
+        result = logIN.auto_login(cmds)
+        res.extend(result)
+    except Exception as e:
+        res.extend(['%s' % e])
+    Rlock.acquire()
+    print('%s 执行完成' % (ip))
+    Rlock.release()
+    return res
 
 
 def monitor_host(host, interval=5):  # 监控IP并写入日志
@@ -43,13 +58,18 @@ def action(max):  # 测试函数
 
 
 def threading_action():  # 多线程入口
-    cc_list = [10, 20]  # 传递的参数
+    global Rlock  # 定义线程锁
+    Rlock = threading.RLock()
+    hostname = 'IP.xlsx'
+    excel_obj = excel(hostname)
+    read_excel = excel_obj.excel_read(sheetnum=1)
+    cc_list = read_excel
     result = []  # 多线程执行后的结果
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as exector:
         future_list = []
         for cc in cc_list:
             # 使用submit提交执行的函数到线程池中，并返回futer对象（非阻塞）
-            future = exector.submit(action, cc)
+            future = exector.submit(runStart, cc)
             future_list.append(future)
             # print(cc, future)
         # as_completed方法传入一个Future迭代器，然后在Future对象运行结束之后yield Future
@@ -58,7 +78,9 @@ def threading_action():  # 多线程入口
             res = future.result()
             # print(res, future)
             result.append(res)
-    print(result)
+    excel_w = excel('result')
+    excel_w.excel_write(title=['IP', '执行结果'], data=result)
+    excel_w.save_file()
 
 
 def VlanifConfig(file):  # 构造vlanif配置
@@ -107,9 +129,9 @@ def VlanifConfigTemp(file):  # 构造vlanif配置 临时代码
 def splitNetworkWriteToExcel():  # 网段划分
     net = '192.168.192.0'
     mask = 18
-    sub_mask1 = 24
-    sub_mask2 = 26
-    count_sub = 4
+    sub_mask1 = 24  # 子网的子网掩码
+    sub_mask2 = 27  # 子网小段子网掩码
+    count_sub = 8  # 分组
     subnetList = netSplit(net, mask, sub_mask1)
     subnetList = listReset(subnetList)
     excel_list = []  # 划分之后的子网段集
@@ -146,17 +168,17 @@ def splitNetworkWriteToExcel():  # 网段划分
     excel_w.save_file()
 
 
+def getVersion():
+    filename = 'IP_list.xlsx'
+    excel_obj = excel(filename)
+    read_excel = excel_obj.excel_read()
+    Bl_ip = '103.233.9.231'
+    username = 'xx'
+    password = 'Xiao@123'
+    conn = deviceControl(Bl_ip, username, password, port=2222)
+    res = conn.connectLinux()
+    print(res)
+
+
 if __name__ == '__main__':
-    # cmd_key = sys.argv
-    # host = sys.argv[1]
-    # interval = int(sys.argv[2])
-    # monitor_host(host, interval)
-    # # # print(time.time())
-    # file = 'IP划分更新后new.xlsx'
-    # VlanifConfigTemp(file)
-    splitNetworkWriteToExcel()
-    # a = [1, 2, 3, 4, 5]
-    # b = a[:2]
-    # del a[:2]
-    # a.extend(b)
-    # print(a)
+    threading_action()
