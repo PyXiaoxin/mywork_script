@@ -174,7 +174,7 @@ def getVersion():
     read_excel = excel_obj.excel_read()
     Bl_ip = '103.233.9.231'
     username = 'xx'
-    password = 'xx11'
+    password = 'xx11111'
     conn = deviceControl(Bl_ip, username, password, port=2222)
     res = conn.connectLinux()
     print(res)
