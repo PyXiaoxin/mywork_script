@@ -26,7 +26,8 @@ def douban():
         filemInfo = indexRule.findall(indexResp.text)
         matchType = re.findall(r'<span property="v:genre">(.*?)</span>', indexResp.text)
         filmType = ','.join(matchType)
-        result += '电影名称：%s\n类型：%s\n上映时间：%s\n评分：%s\n===============================\n' % (filemInfo[0][0], filmType, filemInfo[0][1], filemInfo[0][2])
+        result += '电影名称：%s\n类型：%s\n上映时间：%s\n评分：%s\n===============================\n' % (
+        filemInfo[0][0], filmType, filemInfo[0][1], filemInfo[0][2])
         time.sleep(random.randint(3, 8))
     return result
 
@@ -37,13 +38,15 @@ def sendtoVx():
         'Content-Type': 'application/json'
     }
     url = 'http://www.pushplus.plus/send'
-    token = '94f397f4a2ef4979afa5beaf9b2d8cd1'  # 在pushpush网站中可以找到
+    token = 'XXX'  # 在pushpush网站中可以找到
     title = '每周五电影推荐'  # 改成你要的标题内容
     content = douban()  # 改成你要的正文内容
+    topic = '54412331'
     data = {
         "token": token,
         "title": title,
-        "content": content
+        "content": content,
+        "topic": topic
     }
     body = json.dumps(data).encode(encoding='utf-8')
     resp = requests.post(url, data=body, headers=header)
