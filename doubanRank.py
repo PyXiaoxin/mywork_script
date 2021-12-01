@@ -35,7 +35,7 @@ def searchByResp(urls, session):  # 通过搜索豆瓣网页返回电影信息
         except:
             content = '暂无'
         # print(content)
-        result += '电影名称：%s\n类型：%s\n上映时间：%s\n评分：%s\n简介：%s\n===============================\n' % (
+        result += '电影&电视剧名称：%s\n类型：%s\n上映时间：%s\n评分：%s\n简介：%s\n===============================\n' % (
             filemInfo[0][0], filmType, filemInfo[0][1], filemInfo[0][2], content)
         time.sleep(random.randint(3, 8))
     return result
