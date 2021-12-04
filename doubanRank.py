@@ -41,37 +41,42 @@ def searchByResp(urls, session):  # 通过搜索豆瓣网页返回电影信息
     return result
 
 
+def timeNow():  # 返回当前时间
+    return time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
+
+
 def doubanMovieRank():  # 豆瓣热门电影
     url = 'https://movie.douban.com/j/search_subjects?type=movie&tag=热门&sort=recommend&page_limit=20&page_start=0'
     session = requests.session()
-    print('搜索电影中...')
+    print('%s 搜索电影中...' % timeNow())
     resp = session.get(url, headers=doubanHeader())
     movieUrls = []
     for cell in resp.json()['subjects']:
         movieUrls.append(cell['url'])
         # print(cell['url'])
     result = searchByResp(movieUrls, session)
-    print('搜索完毕!')
-    print('开始发送...')
+    print('%s 搜索完毕!' % timeNow())
+    print('%s 开始发送...' % timeNow())
     sendtoVx('豆瓣热门电影推荐', result)
-    print('发送完毕')
+    print('%s 发送完毕' % timeNow())
+
 
 def doubanTvRank():  # 采集豆瓣热门电视剧
     url = 'https://movie.douban.com/j/search_subjects?type=tv&tag=热门&sort=recommend&page_limit=20&page_start=0'
     session = requests.session()
-    print('搜索电视剧中...')
+    print('%s 搜索电视剧中...' % timeNow())
     resp = session.get(url, headers=doubanHeader())
     movieUrls = []
     for cell in resp.json()['subjects']:
         movieUrls.append(cell['url'])
     result = searchByResp(movieUrls, session)
-    print('搜索完毕!')
-    print('开始发送...')
+    print('%s 搜索完毕!' % timeNow())
+    print('%s 开始发送...' % timeNow())
     sendtoVx('豆瓣热门电视剧推荐', result)
-    print('发送完毕!')
+    print('%s 发送完毕!' % timeNow())
 
 
-def sendtoVx(title, content):#调用WX接口发送消息
+def sendtoVx(title, content):  # 调用WX接口发送消息
     header = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
                       'Chrome/96.0.4664.45 Safari/537.36',
@@ -90,10 +95,9 @@ def sendtoVx(title, content):#调用WX接口发送消息
     }
     body = json.dumps(data).encode(encoding='utf-8')
     resp = requests.post(url, data=body, headers=header)
-    print(resp.text)
+    print(timeNow(), resp.text)
 
 
 if __name__ == '__main__':
     doubanMovieRank()
     doubanTvRank()
-
