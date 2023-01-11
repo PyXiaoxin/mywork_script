@@ -1,18 +1,17 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-import os, sys, re
-import msvcrt
+import os, re, copy
 import paramiko
-import time, threading
+import time
 import ftplib
-import telnetlib
-import pprint
+from telnetlib import Telnet
 import pymysql
 import logging
 from openpyxl import load_workbook
 from openpyxl import Workbook
-from openpyxl.styles import Font, colors
+from openpyxl.styles import Font
+from concurrent import futures
 
 
 #   变量说明
@@ -33,22 +32,27 @@ class deviceControl:  # 交换机登陆模块
 
     def connectDevice(self):  # 适用于连接路由，交换机。登录成功返回True
         times = 0
+        # paramiko.util.log_to_file('paramiko.log') 调试日志
         while True:  # 尝试3次登陆
             try:
                 self.ssh = paramiko.SSHClient()
                 self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-                self.ssh.connect(self.ip, self.port, self.username, self.password, timeout=5)
+                self.ssh.connect(self.ip, self.port, self.username, self.password, timeout=20)
                 break
-            except:
-                return False
+            except Exception as e:
+                # print(Exception, e)
+                time.sleep(2)
+                times += 1
+                if times == 2:  # 超时次数=3返回错误
+                    return False
         self.ssh_shell = self.ssh.invoke_shell()  # 使用invoke是为了可以执行多条命令
         self.ssh_shell.get_pty()
         self.ssh_shell.settimeout(1)  # tunnel超时
         return True
 
     def sendCmd(self, cmd):  # 发送命令(PS:加上了回车符)，返回发送的字节数
-        self._cmd = cmd
-        status = self.ssh_shell.send(' %s\n' % self._cmd)
+        _cmd = cmd
+        status = self.ssh_shell.send(' %s\n' % _cmd)
         return status
 
     def recData(self):  # 接受返回数据
@@ -62,16 +66,13 @@ class deviceControl:  # 交换机登陆模块
                 if data.endswith('---- More ----'):  # 判断末尾是否包含more，包含则发出3个空格
                     for i in range(2):  # 连续发三个空格
                         self.ssh_shell.send(' ')
-                        time.sleep(0.5)
+                        time.sleep(1)
+                    time.sleep(2)
                 else:
                     times += 1
                     if times == 3:  # 超时次数=3的时候跳出循环
                         break
-        data = deleteUnknownStr(data)  # 去掉转义字符等无效字符
-        try:
-            data = re.sub('\s+%s\s+' % self._cmd, '', data)
-        except:
-            pass
+        data = deleteUnknownStr(data)  # 去掉转义字符
         return data
 
     def close(self):  # 关闭session
@@ -80,20 +81,7 @@ class deviceControl:  # 交换机登陆模块
         except:
             pass
 
-    def connectLinux(self):  # 连接Linux服务器
-        ssh = paramiko.SSHClient()
-        # 允许连接不在know_hosts文件中的主机
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        # 连接服务器
-        ssh.connect(hostname=self.ip, port=self.port, username=self.username, password=self.password)
-        # 执行命令
-        stdin, stdout, stderr = ssh.exec_command('df')
-        # 获取命令结果
-        res, err = stdout.read(), stderr.read()
-        result = res if res else err
-        return result.decode()
-
-    def connectOther(self):  # 适用于连接F5/netscaler设备
+    def connectLinux(self):  # 适用于连接F5/netscaler设备
         try:
             self.t = paramiko.Transport(sock=(self.ip, 22))
             self.t.connect(username=self.username, password=self.password)
@@ -106,7 +94,7 @@ class deviceControl:  # 交换机登陆模块
             self.close()
             return False
 
-    def sendCmdOther(self, cmd):  # 适用于F5/netscaler设备发送命令（PS:自带回车符），返回运行结果
+    def sendCmdLinux(self, cmd):  # 适用于F5/netscaler设备发送命令（PS:自带回车符），返回运行结果
         cmd += '\n'  # 命令加上回车符
         result = ''
         self.chan.send(cmd)  # 发送要执行的命令
@@ -126,11 +114,11 @@ class deviceControl:  # 交换机登陆模块
         times = 0
         while True:
             try:
-                self.tn = telnetlib.Telnet(self.ip, port=23, timeout=5)
+                self.tn = Telnet(self.ip, port=23, timeout=5)
                 break
             except:
                 times += 1
-                if times == 2:
+                if times == 3:
                     self.telnetClose()
                     return False
         # 输入登录用户名
@@ -185,27 +173,32 @@ class deviceControl:  # 交换机登陆模块
             pass
 
 
-class deviceControl_auto(deviceControl):  # 继承deviceControl的简洁登录方法
+class deviceContrl_auto(deviceControl):  # 继承deviceControl的简洁登录 SSH TELNET合并
     def __init__(self, ip, username, password, port=22):  # 继承构造方法
         deviceControl.__init__(self, ip, username, password, port)
 
-    def auto_login(self, cmd_list=[]):  # 使用Telnet SSH 执行多条命令返回结果
+    def sendCmd_auto(self, cmd_list=[]):  # 使用Telnet SSH 执行多条命令返回结果
         cmd_local = cmd_list  # list
-        result = []  # 命令返回的结果
+        result = {}  # 命令返回的结果
         ssh_login = deviceControl.connectDevice(self)  # 使用父类SSH登录
         if ssh_login:
+            loginWay = 'BY SSH'
             deviceControl.recData(self)  # 欢迎数据获取
             for cmd in cmd_local:
                 deviceControl.sendCmd(self, cmd)
                 rec_data = deviceControl.recData(self)
-                result.append(rec_data)
+                result[cmd] = rec_data
+                result['loginWay'] = loginWay
             deviceControl.close(self)  # 关闭会话
         else:
             telnet_login = deviceControl.telnetConnect(self)
+            # print(telnet_login)
             if telnet_login:
+                loginWay = 'BY TELNET'
                 for cmd in cmd_local:
                     rec_data = deviceControl.telnetSendReturn(self, cmd)
-                    result.append(rec_data)
+                    result[cmd] = rec_data
+                    result['loginWay'] = loginWay
                 deviceControl.telnetClose(self)
             else:
                 raise RuntimeError('SSH TELNET FAIL')
@@ -228,27 +221,6 @@ def deleteUnknownStr(line_p):  # 删除垃圾字符，转义序列字符
         i += 1
     line = re.sub('\s{2}---- More ----\s+', '', line)
     return line
-
-
-def pwd_input(msg=''):  # 输入密码变*号
-    if msg != '':
-        sys.stdout.write(msg)
-    chars = []
-    while True:
-        newChar = msvcrt.getch()
-        if newChar in '\3\r\n':  # 如果是换行，Ctrl+C，则输入结束
-            print('')
-            if newChar in '\3':  # 如果是Ctrl+C，则将输入清空，返回空字符串
-                chars = []
-            break
-        elif newChar == '\b':  # 如果是退格，则删除末尾一位
-            if chars:
-                del chars[-1]
-                sys.stdout.write('\b \b')  # 左移一位，用空格抹掉星号，再退格
-        else:
-            chars.append(newChar)
-            sys.stdout.write('*')  # 显示为星号
-    return ''.join(chars)
 
 
 # =======================================分割线=============================================================
@@ -398,8 +370,7 @@ class mysql_db:  # 数据库模块
             pass
 
 
-# Excel表格处理 只支持.xlsx格式
-class excel:
+class excel:  # Excel表格处理 只支持.xlsx格式
     def __init__(self, filename):  # 初始化
         self.filename = filename  # 文件名 .xlsx
         self.wb_obj = Workbook()  # 写入对象初始化
@@ -454,6 +425,19 @@ class excel:
         return data_result
 
 
+def readTxt(filename):  # 读取TXT 返回list 忽略#号
+    readReturn = []
+    with open(filename, 'r', encoding='utf-8') as openfiles:
+        readInfo = openfiles.readlines()
+    for read_row in readInfo:  # #号行忽略
+        readTemp = read_row.strip().startswith('#')
+        if readTemp:
+            readInfo.remove(read_row)
+        else:
+            readReturn.append(read_row.strip().strip('\n\r'))
+    return readReturn
+
+
 def makeDir(dirName):  # 在当前目录创建文件夹
     path = os.getcwd()  # 获取当前路径
     dir = os.listdir(path)  # 获取当前路径所有文件名
@@ -476,7 +460,7 @@ class logg:  # 日志模块
 
         # 创建一个handler，用于将日志输出到控制台
         ch = logging.StreamHandler()
-        ch.setLevel(logging.INFO)
+        ch.setLevel(logging.ERROR)
 
         # 定义handler的输出格式
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s:%(message)s',
@@ -492,5 +476,40 @@ class logg:  # 日志模块
         return self.logger
 
 
+class autoThreadingPool():  # 线程池
+    def __init__(self, worker=30):
+        from .public_env import get_value
+        self.worker_local = worker
+        self.result = []
+        self.bar = get_value('bar')
+
+    def __call__(self, func, func_arg=[], datalist=[]):  # 函数，参数，循环数据
+        func_local = func  # function
+        datalist_local = datalist  # data
+        with futures.ThreadPoolExecutor(max_workers=self.worker_local) as exector:  # max_workers 线程池的数量
+            future_list = []
+            for row in datalist_local:
+                func_arg_in = copy.deepcopy(func_arg)
+                func_arg_in.extend(row)
+                future = exector.submit(func_local, func_arg_in)
+                future_list.append(future)
+            unit = '{:.2f}'.format(0.8 / len(future_list))
+            num = 0.1
+            for future in futures.as_completed(future_list):
+                res = future.result(600)
+                self.result.append(res)
+                num += unit
+                self.bar(num)
+        return self.result
+
+
 if __name__ == '__main__':
-    pass
+    # ip = 'XXXX'
+    # ip2 = 'XXXX'
+    # user = 'XXX'
+    # passwd = 'xxxxx'
+    # cmds = ['dis clock', 'dis version']
+    # conn = deviceContrl_auto(ip, user, passwd)
+    # res = conn.sendCmd_auto(cmds)
+    # print(res)
+    print(readTxt('../read/Keywords.txt'))
