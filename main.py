@@ -205,6 +205,62 @@ def funcAction(user, passwd, fileName, logName, func, worker=30):  # 主模块
         bar(1)
         return result
     
+def writeToExcel(filename, title, data):  # 写入数据到excel
+    filename_local = 'data/%s' % filename
+    title_local = title
+    data_local = data
+    write_info = excel(filename_local)
+    try:
+        write_info.excel_write(title_local, data_local)
+        savename = write_info.save_file()
+    except Exception as e:
+        logger.get_log().error('文件写入失败,%s' % (e, Exception))
+        return
+    logger.get_log().info('文件 %s 写入完成,保存至data目录下' % (savename))
+
+
+def writeToTXT(data):  # 写入数据到TXT
+    data_local = data
+    timeNow = time.strftime('%Y%m%d%H%M%S', time.localtime(time.time()))
+    try:
+        for data_unit in data_local:
+            with open('data/%s_%s_%s.log' % (data_unit[0], data_unit[1], timeNow), 'w') as f:
+                f.write(data_unit[2])
+    except Exception as e:
+        logger.get_log().error('文件写入失败,%s %s' % (e, Exception))
+        return
+    logger.get_log().info('文件写入完成,保存至data目录下')
+
+
+def platform_select():  # 判断当前运行环境
+    username = ''
+    password = ''
+    if ('Windows' in platform.system()):
+        from interface import passwdinput
+        username = input('用户:')
+        password = passwdinput('密码:')
+        while True:
+            worker = input('线程数:')
+            if int(worker) <= 200 and int(worker) >= 1:
+                break
+            else:
+                print('线程数范围1-200')
+    elif ('Linux' in platform.system()):
+        import sys
+        username, password, worker = sys.argv[1], sys.argv[2], sys.argv[3]
+    else:
+        print(platform.system(), platform.version(), platform.machine())
+        print('当前运行环境不支持')
+    return username, password, int(worker)
+
+
+def start_action():  #入口
+    fileName = 'devices_ip.xlsx'
+    title = ['IP', 'Description', 'PingStatus(ms)', 'loginWay']  # 保存的sheet标题
+    from checkConfig import deviceCheck
+    username, password, worker = platform_select()
+    data = funcAction(username, password, fileName, savename, deviceCheck, worker)
+    writeToExcel(savename, title, data)
 
 if __name__ == '__main__':
-    threading_action()
+    start_action():
