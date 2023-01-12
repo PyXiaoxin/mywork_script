@@ -179,6 +179,32 @@ def getVersion():
     res = conn.connectLinux()
     print(res)
 
+def funcAction(user, passwd, fileName, logName, func, worker=30):  # 主模块
+    global Rlock_local, logger
+    with alive_bar(title='Progress', bar='filling', spinner='waves2', unknown='wait', manual=True) as bar:  # 进度条
+        init()  # 初始化全局变量
+        set_value('logger', logg(logName, 'log/%s' % logName))
+        file = fileName  # 读取文件名
+        file_dir = 'read/%s' % file
+        read = excel(file_dir)
+        logger = get_value('logger')
+        logger.get_log().info('当前运行环境:%s %s %s' % (platform.system(), platform.version(), platform.machine()))
+        bar(0.05)
+        try:
+            read_info = read.excel_read()
+            logger.get_log().info('读取 \'%s\' 成功' % file)
+        except Exception as e:
+            logger.get_log().error('读取 \'%s\' 失败:%s' % (file, e))
+            bar(1)
+            return
+        bar(0.1)
+        arg = [user, passwd]  # 用户密码
+        my_poll = autoThreadingPool(worker)
+        result = my_poll(func, arg, read_info)
+        logger.get_log().info('数据获取全部完成,准备写入本地')
+        bar(1)
+        return result
+    
 
 if __name__ == '__main__':
     threading_action()
