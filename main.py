@@ -180,14 +180,16 @@ def getVersion():
     print(res)
 
 def funcAction(user, passwd, fileName, logName, func, worker=30):  # 主模块
-    global Rlock_local, logger
+    global Rlock_local, logger, bar
     with alive_bar(title='Progress', bar='filling', spinner='waves2', unknown='wait', manual=True) as bar:  # 进度条
         init()  # 初始化全局变量
         set_value('logger', logg(logName, 'log/%s' % logName))
+        set_value('bar', bar)
         file = fileName  # 读取文件名
         file_dir = 'read/%s' % file
         read = excel(file_dir)
         logger = get_value('logger')
+        bar = get_value('bar')
         logger.get_log().info('当前运行环境:%s %s %s' % (platform.system(), platform.version(), platform.machine()))
         bar(0.05)
         try:
