@@ -478,10 +478,9 @@ class logg:  # 日志模块
 
 class autoThreadingPool():  # 线程池
     def __init__(self, worker=30):
-        from .public_env import get_value
+        self.bar = get_value('bar')
         self.worker_local = worker
         self.result = []
-        self.bar = get_value('bar')
 
     def __call__(self, func, func_arg=[], datalist=[]):  # 函数，参数，循环数据
         func_local = func  # function
@@ -493,10 +492,10 @@ class autoThreadingPool():  # 线程池
                 func_arg_in.extend(row)
                 future = exector.submit(func_local, func_arg_in)
                 future_list.append(future)
-            unit = '{:.2f}'.format(0.8 / len(future_list))
+            unit = 0.8 / len(future_list)
             num = 0.1
             for future in futures.as_completed(future_list):
-                res = future.result(600)
+                res = future.result()
                 self.result.append(res)
                 num += unit
                 self.bar(num)
