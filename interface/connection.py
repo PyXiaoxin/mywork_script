@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-import os, re, copy
+import os, re
 import paramiko
 import time
 import ftplib
@@ -12,6 +12,7 @@ from openpyxl import load_workbook
 from openpyxl import Workbook
 from openpyxl.styles import Font
 from concurrent import futures
+from .public_env import get_value
 
 
 #   变量说明
@@ -37,13 +38,14 @@ class deviceControl:  # 交换机登陆模块
             try:
                 self.ssh = paramiko.SSHClient()
                 self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-                self.ssh.connect(self.ip, self.port, self.username, self.password, timeout=20)
+                self.ssh.connect(self.ip, self.port, self.username, self.password, timeout=300)
                 break
             except Exception as e:
                 # print(Exception, e)
                 time.sleep(2)
                 times += 1
                 if times == 2:  # 超时次数=3返回错误
+                    self.close()  # 关闭会话
                     return False
         self.ssh_shell = self.ssh.invoke_shell()  # 使用invoke是为了可以执行多条命令
         self.ssh_shell.get_pty()
@@ -114,7 +116,7 @@ class deviceControl:  # 交换机登陆模块
         times = 0
         while True:
             try:
-                self.tn = Telnet(self.ip, port=23, timeout=5)
+                self.tn = Telnet(self.ip, port=23, timeout=10)
                 break
             except:
                 times += 1
@@ -122,10 +124,10 @@ class deviceControl:  # 交换机登陆模块
                     self.telnetClose()
                     return False
         # 输入登录用户名
-        self.tn.read_until(b'Username:')
+        self.tn.read_until(b'Username:', timeout=10)
         self.tn.write(self.username.encode('ascii') + b'\n')
         # 输入登录密码
-        self.tn.read_until(b'Password:')
+        self.tn.read_until(b'Password:', timeout=10)
         self.tn.write(self.password.encode('ascii') + b'\n')
         times = 0
         while True:
@@ -136,7 +138,7 @@ class deviceControl:  # 交换机登陆模块
                 return True
             else:
                 times += 1
-                if times == 3:  # 尝试5次不成功则跳出循环
+                if times == 3:  # 尝试4次不成功则返回错误
                     return False
 
     def telnetSendReturn(self, cmd):  # 发送命令并获取数据
@@ -192,7 +194,6 @@ class deviceContrl_auto(deviceControl):  # 继承deviceControl的简洁登录 SS
             deviceControl.close(self)  # 关闭会话
         else:
             telnet_login = deviceControl.telnetConnect(self)
-            # print(telnet_login)
             if telnet_login:
                 loginWay = 'BY TELNET'
                 for cmd in cmd_local:
@@ -394,7 +395,7 @@ class excel:  # Excel表格处理 只支持.xlsx格式
 
     # 保存文件
     def save_file(self):
-        timeNow = time.strftime('%Y%m%d%H%M%S', time.localtime(time.time()))
+        timeNow = time.strftime('%Y-%m-%d_%H%M%S', time.localtime(time.time()))
         filename_save = self.filename.replace('.xlsx', '')
         filename_save = '%s_%s.xlsx' % (filename_save, timeNow)  # 返回文件名
         self.wb_obj.save(filename_save)  # 存盘
@@ -452,7 +453,7 @@ class logg:  # 日志模块
         self.logger.setLevel(logging.DEBUG)
 
         # 创建一个handler，用于写入日志文件
-        timeNow = time.strftime('%Y%m%d%H%M%S', time.localtime(time.time()))
+        timeNow = time.strftime('%Y-%m-%d_%H%M%S', time.localtime(time.time()))
         filename_local = filename
         logname = '%s_%s.log' % (filename_local, timeNow)  # 日志名+日期= 存盘的文件名
         fh = logging.FileHandler(logname, encoding='utf-8')  # 指定utf-8格式编码，避免输出的日志文本乱码
@@ -482,15 +483,13 @@ class autoThreadingPool():  # 线程池
         self.worker_local = worker
         self.result = []
 
-    def __call__(self, func, func_arg=[], datalist=[]):  # 函数，参数，循环数据
+    def __call__(self, func, datalist=[]):  # 函数，迭代数据
         func_local = func  # function
         datalist_local = datalist  # data
         with futures.ThreadPoolExecutor(max_workers=self.worker_local) as exector:  # max_workers 线程池的数量
             future_list = []
             for row in datalist_local:
-                func_arg_in = copy.deepcopy(func_arg)
-                func_arg_in.extend(row)
-                future = exector.submit(func_local, func_arg_in)
+                future = exector.submit(func_local, row)
                 future_list.append(future)
             unit = 0.8 / len(future_list)
             num = 0.1
@@ -511,4 +510,5 @@ if __name__ == '__main__':
     # conn = deviceContrl_auto(ip, user, passwd)
     # res = conn.sendCmd_auto(cmds)
     # print(res)
-    print(readTxt('../read/Keywords.txt'))
+    unit = '{:.2f}'.format(0.8 / len(range(50)))
+    print(unit)
