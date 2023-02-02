@@ -39,6 +39,8 @@ class deviceControl:  # 交换机登陆模块
                 self.ssh = paramiko.SSHClient()
                 self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                 self.ssh.connect(self.ip, self.port, self.username, self.password, timeout=300)
+                self.ssh_shell = self.ssh.invoke_shell()  # 使用invoke是为了可以执行多条命令
+                self.ssh_shell.settimeout(1)  # tunnel超时
                 break
             except Exception as e:
                 # print(Exception, e)
@@ -47,9 +49,7 @@ class deviceControl:  # 交换机登陆模块
                 if times == 2:  # 超时次数=3返回错误
                     self.close()  # 关闭会话
                     return False
-        self.ssh_shell = self.ssh.invoke_shell()  # 使用invoke是为了可以执行多条命令
-        self.ssh_shell.get_pty()
-        self.ssh_shell.settimeout(1)  # tunnel超时
+
         return True
 
     def sendCmd(self, cmd):  # 发送命令(PS:加上了回车符)，返回发送的字节数
