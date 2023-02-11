@@ -7,7 +7,6 @@ from interface.tipsFunctions import netSplit, listReset
 import time, re, sys
 import concurrent.futures
 import threading
-import vthread
 
 
 def runStart(args_ments):
