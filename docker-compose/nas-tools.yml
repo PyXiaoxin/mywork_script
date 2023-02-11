@@ -25,13 +25,14 @@ services:
     environment:
       - PUID=1000
       - PGID=1000
-      - EBUI_PORT="8888"
-      - BT_PORT="29568"
-      - PUSHPLUS_TOKEN="XXXXXX" #需要修改成自己的token
+      - WEBUI_PORT=8888
+      - BT_PORT=29568
+      - PUSHPLUS_TOKEN="94f397f4a2ef4979afa5beaf9b2d8cd1" #需要修改成自己的token
       - ENABLE_AUTO_CATEGORY=False
     volumes:
-      - /data01/nastools/sys/qbittorrent:/config	#transmission配置文件
-      - /data01/nastools/downloads/mov:/data/downloads   #视频文件
+      - /data01/nastools/sys/qbittorrent/config:/data/config #配置文件
+      - /data01/nastools/sys/qbittorrent/data:/data/data
+      - /data01/nastools/downloads/mov:/data/downloads #视频文件
     ports:
       - 8888:8888
       - 29568:29568
@@ -47,7 +48,7 @@ services:
     volumes:
       - /data01/nastools/sys/jellyfin/config:/config  #jellyfin配置文件
       - /data01/nastools/sys/jellyfin/cache:/cache  #jellyfin缓存
-      - /data01/nastools/downloads/link:/media		#数据文件
+      - /data01/nastools/downloads/link:/media  #数据文件
     ports:
       - 8020:8096
       - 8920:8920
@@ -59,11 +60,11 @@ services:
     image: allanpk716/chinesesubfinder:latest
     volumes:
       - /data01/nastools/sys/chinesesubfinder/config:/config  # 冒号左边请修改为你想在主机上保存配置、日志等文件的路径
-      - /data01/nastools/downloads/link/:/media    # 请修改为你的媒体目录，冒号右边可以改成你方便记忆的目录，多个媒体目录需要分别映射进来
-      - /data01/nastools/sys/chinesesubfinder/browser:/root/.cache/rod/browser   # 容器重启后无需再次下载 chrome，除非 go-rod 更新
+      - /data01/nastools/downloads/link/:/media  # 请修改为你的媒体目录，冒号右边可以改成你方便记忆的目录，多个媒体目录需要分别映射进来
+      - /data01/nastools/sys/chinesesubfinder/browser:/root/.cache/rod/browser # 容器重启后无需再次下载 chrome，除非 go-rod 更新
     environment:
-      - PUID=1002         # uid
-      - PGID=0         # gid
+      - PUID=1000         # uid
+      - PGID=1000         # gid
       - PERMS=true        # 是否重设/media权限
       - TZ=Asia/Shanghai  # 时区
       - UMASK=022         # 权限掩码
