@@ -27,7 +27,7 @@ services:
       - PGID=1000
       - WEBUI_PORT=8888
       - BT_PORT=29568
-      - PUSHPLUS_TOKEN="94f397f4a2ef4979afa5beaf9b2d8cd1" #需要修改成自己的token
+      - PUSHPLUS_TOKEN="xxx" #需要修改成自己的token
       - ENABLE_AUTO_CATEGORY=False
     volumes:
       - /data01/nastools/sys/qbittorrent/config:/data/config #配置文件
