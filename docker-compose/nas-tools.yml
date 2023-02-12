@@ -56,7 +56,7 @@ services:
       - /data01/nastools/sys/jellyfin/cache:/cache  #jellyfin缓存
       - /data01/nastools/downloads/link:/media  #数据文件
     ports:
-      - 8020:8096
+      - 8096:8096
       - 8920:8920
     restart: unless-stopped
     devices:
