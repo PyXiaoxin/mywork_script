@@ -1,12 +1,12 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-import os, re
+import os
+import re
+import csv
 import paramiko
 import time
-import ftplib
 from telnetlib import Telnet
-import pymysql
 import logging
 from openpyxl import load_workbook
 from openpyxl import Workbook
@@ -33,18 +33,17 @@ class deviceControl:  # 交换机登陆模块
 
     def connectDevice(self):  # 适用于连接路由，交换机。登录成功返回True
         times = 0
-        # paramiko.util.log_to_file('paramiko.log') 调试日志
+        paramiko.util.log_to_file('paramiko.log')  # 调试日志
         while True:  # 尝试3次登陆
             try:
                 self.ssh = paramiko.SSHClient()
                 self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-                self.ssh.connect(self.ip, self.port, self.username, self.password, timeout=300)
+                self.ssh.connect(self.ip, self.port, self.username, self.password, timeout=200)
                 self.ssh_shell = self.ssh.invoke_shell()  # 使用invoke是为了可以执行多条命令
                 self.ssh_shell.settimeout(1)  # tunnel超时
                 return True
-            except Exception as e:
-                # print(Exception, e)
-                time.sleep(2)
+            except:
+                time.sleep(1)
                 times += 1
                 if times == 2:  # 超时次数=3返回错误
                     self.close()  # 关闭会话
@@ -60,14 +59,13 @@ class deviceControl:  # 交换机登陆模块
         times = 0  # 循环次数叠加
         while True:
             try:
-                rec = self.ssh_shell.recv(1024)
+                rec = self.ssh_shell.recv(10240)
                 data += rec.decode('utf-8')
             except:
                 if data.endswith('---- More ----'):  # 判断末尾是否包含more，包含则发出3个空格
                     for i in range(2):  # 连续发三个空格
                         self.ssh_shell.send(' ')
-                        time.sleep(1)
-                    time.sleep(2)
+                        time.sleep(0.5)
                 else:
                     times += 1
                     if times == 3:  # 超时次数=3的时候跳出循环
@@ -76,6 +74,10 @@ class deviceControl:  # 交换机登陆模块
         return data
 
     def close(self):  # 关闭session
+        try:
+            self.ssh_shell.close()
+        except:
+            pass
         try:
             self.ssh.close()
         except:
@@ -87,10 +89,9 @@ class deviceControl:  # 交换机登陆模块
             self.t.connect(username=self.username, password=self.password)
             self.chan = self.t.open_session(timeout=5)
             self.chan.settimeout(0.5)  # 设置session超时
-            self.chan.get_pty()
             self.chan.invoke_shell()
             return True
-        except Exception as e:
+        except:
             self.close()
             return False
 
@@ -112,6 +113,8 @@ class deviceControl:  # 交换机登陆模块
 
     def telnetConnect(self):
         times = 0
+        # socket.setdefaulttimeout(300)
+        # socket.timeout(300)
         while True:
             try:
                 self.tn = Telnet(self.ip, port=23, timeout=10)
@@ -137,6 +140,7 @@ class deviceControl:  # 交换机登陆模块
             else:
                 times += 1
                 if times == 3:  # 尝试4次不成功则返回错误
+                    self.telnetClose()
                     return False
 
     def telnetSendReturn(self, cmd):  # 发送命令并获取数据
@@ -146,7 +150,7 @@ class deviceControl:  # 交换机登陆模块
         try:
             _cmd = _cmd.encode('ascii') + b'\n'
             self.tn.write(_cmd)
-        except Exception as e:
+        except:
             return data
         while True:
             time.sleep(0.5)
@@ -160,7 +164,7 @@ class deviceControl:  # 交换机登陆模块
                 self.tn.write(' '.encode('ascii'))
             else:
                 times += 1
-                if times == 10:
+                if times == 5:
                     break
         # data = re.re('  ---- More ----\x1b[42D                                          \x1b[42D', '')
         data = deleteUnknownStr(data)
@@ -177,12 +181,12 @@ class deviceContrl_auto(deviceControl):  # 继承deviceControl的简洁登录 SS
     def __init__(self, ip, username, password, port=22):  # 继承构造方法
         deviceControl.__init__(self, ip, username, password, port)
 
-    def sendCmd_auto(self, cmd_list=[]):  # 使用Telnet SSH 执行多条命令返回结果
+    def sendCmd_auto(self, cmd_list: list):  # 使用Telnet SSH 执行多条命令返回结果
         cmd_local = cmd_list  # list
         result = {}  # 命令返回的结果
         ssh_login = deviceControl.connectDevice(self)  # 使用父类SSH登录
         if ssh_login:
-            loginWay = 'BY SSH'
+            loginWay = 'SSH'
             deviceControl.recData(self)  # 欢迎数据获取
             for cmd in cmd_local:
                 deviceControl.sendCmd(self, cmd)
@@ -193,14 +197,14 @@ class deviceContrl_auto(deviceControl):  # 继承deviceControl的简洁登录 SS
         else:
             telnet_login = deviceControl.telnetConnect(self)
             if telnet_login:
-                loginWay = 'BY TELNET'
+                loginWay = 'TELNET'
                 for cmd in cmd_local:
                     rec_data = deviceControl.telnetSendReturn(self, cmd)
                     result[cmd] = rec_data
                     result['loginWay'] = loginWay
                 deviceControl.telnetClose(self)
             else:
-                raise RuntimeError('SSH TELNET FAIL')
+                raise RuntimeError('SSH&TELNET CONNECT ERROR')
         return result
 
 
@@ -222,153 +226,6 @@ def deleteUnknownStr(line_p):  # 删除垃圾字符，转义序列字符
     return line
 
 
-# =======================================分割线=============================================================
-
-
-# 变量说明
-# ip = FTP服务器地址
-# username = 用户名
-# password = 密码
-# port = 端口号 默认为21
-# filename = 文件名
-# remotePath = 远程路径 默认是进入FTP服务器的当前路径
-# localPath = 本地路径
-class easyftp:  # FTP模块
-    def __init__(self, ip, username, password, port=21):
-        self.ip = ip
-        self.username = username
-        self.password = password
-        self.port = port
-
-    def connetServer(self):  # 登录FTP服务器，如果成功返回欢迎信息，如果失败则返回false
-        try:
-            self.ftp = ftplib.FTP()  # 调用ftplib的FTP()类
-            self.ftp.connect(self.ip, self.port, timeout=10)  # 连接FTP服务器
-            self.ftp.login(self.username, self.password)  # 输入用户密码登录
-            welInfo = self.ftp.getwelcome()  # 登录成功返回欢迎信息
-            return welInfo
-        except:  # 登录失败返回false
-            return False
-
-    def ftpGet(self, filename, remotePath=''):  # 下载文件,不支持中文文件名
-        try:
-            self.ftp.cwd(remotePath)  # 切换FTP的目录
-            remoteFiles = self.ftp.nlst()  # 获取当前目录的文件名
-            for i in remoteFiles:  # 遍历文件名
-                if filename == i:  # 如果文件名等于输入的文件名
-                    # self.makeDir(self.ip)  # 创建以IP地址命名的文件夹
-                    localPathFile = filename  # self.ip + '\\' + filename  # 本地存放路径，当前路径下，以IP为文件夹名+文件名
-                    with open(localPathFile, 'wb') as fd:  # 打开本地文件以写入的方式
-                        self.ftp.retrbinary('RETR ' + filename, fd.write, 1024)  # 执行下载操作
-                    remoteDir = []
-                    self.ftp.dir('', remoteDir.append)
-                    for fileLine in remoteDir:
-                        if filename in fileLine:
-                            try:
-                                remoteFileSize = str(fileLine).split()[4]  # 获取上传的文件大小，通过查看大小命令来查看文件大小
-                            except:
-                                remoteFileSize = str(fileLine).split()[2]  # Windows目录获取文件大小
-                    localFileSize = os.path.getsize(localPathFile)  # 获取本地的文件大小
-                    # print remoteFileSize,localFileSize
-                    if int(localFileSize) == int(remoteFileSize):  # 判断远程的文件和本地的的大小是否相等
-                        return True
-                    else:
-                        return False
-            print('%s not found' % filename)
-            return False
-        except Exception as e:
-            print(e)
-            return False
-
-    def ftpPut(self, filename, remotePath='', localPath=''):  # 文件上传，不支持中文文件名。
-        try:
-            filename = filename.lower()  # 将文件名转换为小写字母。
-            self.ftp.cwd(remotePath)  # 切换FTP服务器的目录，有的FTP不支持
-            remoteFiles = self.ftp.nlst()
-            if filename not in remoteFiles and filename.upper() not in remoteFiles:  # 判断文件是否已存在
-                localPathFile = filename
-                if localPath != '':  # 如果有输入本地目录，那么文件名等于目录加上文件名。
-                    localPathFile = localPath + filename
-                with open(localPathFile, 'rb') as fd:  # 以 with的方式打开文件
-                    self.ftp.storbinary('STOR %s' % filename, fd, 1024)  # 执行上传文件动作
-                # remoteFileSize = self.ftp.size(filename)  # 获取FTP上的文件大小,交换机不支持这个命令
-                remoteDir = []
-                self.ftp.dir('', remoteDir.append)
-                for fileLine in remoteDir:
-                    fileLine = fileLine.lower()  # 将文件名转换为小写字母。
-                    if filename in fileLine:
-                        remoteFileSize = str(fileLine).split()[4]  # 获取上传的文件大小，通过查看大小命令来查看文件大小
-                localFileSize = os.path.getsize(localPathFile)  # 获取本地的文件大小
-                if int(localFileSize) == int(remoteFileSize):  # 判断远程的文件和本地的的大小是否相等
-                    print('\'%s\' upload completed at %s' % (filename, self.ip))
-                    return True
-                else:
-                    print('\'%s\' remote file was incomplete at %s' % (filename, self.ip))
-                    return False
-            else:
-                print('\'%s\' this file existed on %s' % (filename, self.ip))
-                return False
-        except Exception as e:
-            print(self.ip, e)
-            return False
-
-    def close(self):  # 退出FTP连接
-        try:
-            self.ftp.quit()
-        except:
-            pass
-
-
-class mysql_db:  # 数据库模块
-    def __init__(self, host, username, password, dbname):  # 初始化
-        self.host = host
-        self.username = username
-        self.password = password
-        self.dbname = dbname
-
-    def mysql_auth(self):
-        try:
-            # 打开数据库连接
-            self.db = pymysql.connect(self.host, self.username, self.password, self.dbname, charset='utf8')
-            # 使用 cursor() 方法创建一个游标对象 cursor
-            self.cur = self.db.cursor()
-            return True
-        except Exception:
-            raise
-
-    def db_action(self, db_sql):  # 数据库插入
-        # SQL 插入语句
-        sql_insert = db_sql
-        try:
-            # 执行sql语句
-            self.cur.execute(sql_insert)
-            # 提交到数据库执行
-            self.db.commit()
-            return True
-        except Exception as e:
-            # 如果发生错误则回滚
-            self.db.rollback()
-            self.db_close()
-            raise
-
-    def db_get(self, db_sql):  # 查询
-        sql_query = db_sql
-        try:
-            self.cur.execute(sql_query)
-        except Exception as e:
-            self.db_close()
-            raise e
-        db_data = self.cur.fetchall()  # 获取全部数据
-        return db_data
-
-    def db_close(self):  # 关闭数据库
-        try:
-            self.cur.close()
-            self.db.close()
-        except:
-            pass
-
-
 class excel:  # Excel表格处理 只支持.xlsx格式
     def __init__(self, filename):  # 初始化
         self.filename = filename  # 文件名 .xlsx
@@ -376,9 +233,9 @@ class excel:  # Excel表格处理 只支持.xlsx格式
         self.wb_obj.active
 
     # 写入数据
-    def excel_write(self, title, data, sheetname='data01', sheetIndex=1):
+    def excel_write(self, title, data, sheetname='data01', sheetIndex=1):  # 一次性写入 data 格式为[[],[]]
         title_local = title  # 标题 list
-        data_local = data  # 需要写入的数据 list[[],[]]
+        data_local = data
         sheetname_local = sheetname  # sheet名称
         sheetIndex_local = sheetIndex - 1  # sheet的位置 默认是第一张表 位置从0开始
         wsObj = self.wb_obj.create_sheet(sheetname_local, sheetIndex_local)
@@ -388,8 +245,26 @@ class excel:  # Excel表格处理 只支持.xlsx格式
             cell = wsObj.cell(row=1, column=i)
             cell.font = title_font
         for row_data in data_local:
-            # print(row_data)
-            wsObj.append(row_data)  # 写入数据
+            try:
+                wsObj.append(row_data)  # 写入数据
+            except:
+                for row in row_data:
+                    wsObj.append(row)
+
+    def excel_creat(self, title, sheetname='data01', sheetIndex=1):  # 创建对象并设置好列头
+        title_local = title  # 标题 list
+        sheetname_local = sheetname  # sheet名称
+        sheetIndex_local = sheetIndex - 1  # sheet的位置 默认是第一张表 位置从0开始
+        self.wsobj = self.wb_obj.create_sheet(sheetname_local, sheetIndex_local)
+        self.wsobj.append(title_local)
+        title_font = Font(b='bold', size='12')
+        for i in range(1, len(title) + 1):
+            cell = self.wsobj.cell(row=1, column=i)
+            cell.font = title_font
+
+    def write_row(self, data: list):  # 写入单行数据[]
+        row_data = data
+        self.wsobj.append(row_data)
 
     # 保存文件
     def save_file(self):
@@ -431,16 +306,26 @@ def readTxt(filename):  # 读取TXT 返回list 忽略#号
     for read_row in readInfo:  # #号行忽略
         readTemp = read_row.strip().startswith('#')
         if readTemp:
-            readInfo.remove(read_row)
+            continue
         else:
             readReturn.append(read_row.strip().strip('\n\r'))
     return readReturn
 
 
+def readCsv(filename):  # 读取CSV文件返回list
+    result = []
+    with open(filename, mode="r") as f:
+        reader = csv.reader(f)
+        next(reader)
+        for row in reader:
+            result.append(row)
+    return result
+
+
 def makeDir(dirName):  # 在当前目录创建文件夹
     path = os.getcwd()  # 获取当前路径
     dir = os.listdir(path)  # 获取当前路径所有文件名
-    if dirName not in dir:  # 判断本地是否已经有此文件。如果没有则创建，有则不创建。
+    if dirName not in dir:  # 判断本地是否已经有此文件有则不创建。
         os.mkdir(dirName)
 
 
@@ -481,13 +366,13 @@ class autoThreadingPool():  # 线程池
         self.worker_local = worker
         self.result = []
 
-    def __call__(self, func, datalist=[]):  # 函数，迭代数据
+    def __call__(self, func, datalist: list):  # 函数，迭代数据
         func_local = func  # function
         datalist_local = datalist  # data
-        with futures.ThreadPoolExecutor(max_workers=self.worker_local) as exector:  # max_workers 线程池的数量
+        with futures.ThreadPoolExecutor(max_workers=self.worker_local) as executor:  # max_workers 线程池的数量
             future_list = []
             for row in datalist_local:
-                future = exector.submit(func_local, row)
+                future = executor.submit(func_local, row)
                 future_list.append(future)
             unit = 0.8 / len(future_list)
             num = 0.1
@@ -508,5 +393,4 @@ if __name__ == '__main__':
     # conn = deviceContrl_auto(ip, user, passwd)
     # res = conn.sendCmd_auto(cmds)
     # print(res)
-    unit = '{:.2f}'.format(0.8 / len(range(50)))
-    print(unit)
+    readTxt('../read/Keywords.txt')
