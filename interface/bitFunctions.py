@@ -6,6 +6,7 @@ import re
 import socket
 from pythonping import ping
 import base64
+import tempfile
 
 
 # 函数介绍：
@@ -74,6 +75,29 @@ def mscgGateway(ip, mask='255.255.254.0'):
     return gatewayALL
 
 
+def switchNetwork(ip, mask):  # 给IP和MASK返回网络号
+    result = []  # 处理后的结果
+    ipddress = ip
+    ip_mask = mask
+    ipaddressList = ipddress.split('.')
+    ip_maskList = ip_mask.split('.')
+    for num in range(len(ipaddressList)):  # 首先转换为二进制
+        ipaddressList[num] = decSwitchBinary(ipaddressList[num])
+    for num in range(len(ip_maskList)):
+        ip_maskList[num] = decSwitchBinary(ip_maskList[num])
+    net = list(''.join(ipaddressList))
+    ip_maskList = list(''.join(ip_maskList))
+    for maskdataNum in range(len(ip_maskList)):  # 转换为list之后相与运算
+        if ip_maskList[maskdataNum] == '0':
+            net[maskdataNum] = '0'
+    for i in range(0, len(net), 8):  # 得到的结果之后8个元素分组转换为十进制处理后返回
+        temp = ''.join(net[i:i + 8])
+        result.append(temp)
+    for ipslit in range(len(result)):
+        result[ipslit] = binarySwitchDec(result[ipslit])
+    return '.'.join(result)
+
+
 def decSwitchBinary(num):  # 将十进制转换为二进制不够8位前面补0
     num = str(num)
     binaryNum = '{0:08b}'.format(int(num))
@@ -86,15 +110,23 @@ def binarySwitchDec(num):  # 将二进制转换为十进制
     return str(decNum)
 
 
+def convert_ipv4(ip):
+    return tuple(int(n) for n in ip.split('.'))
+
+
+def check_ipv4_in(addr, start, end):  # 判断IP地址范围 在范围返回true 不在返回false
+    return convert_ipv4(start) <= convert_ipv4(addr) <= convert_ipv4(end)
+
+
 def scanPort(ip, port):  # 端口测试 仅支持TCP
     conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     conn.settimeout(2)
     result = conn.connect_ex((ip, int(port)))
+    conn.close()
     if result == 0:  # 如果通，result=0,返回true
         return True
     else:  # 如果不通，result=1,返回false
         return False
-    conn.close()
 
 
 def image_to_base64(path):
@@ -133,14 +165,44 @@ def passwdinput(words):  # 输入密码显示*
             msvcrt.putch(b'*')
     os.system('pause')
 
+
 def revData_error(data):  # 判断是否包含错误代码
     errorCode = ['Error:']
     for error in errorCode:
         match = re.search(r'%s' % error, data, re.IGNORECASE)
         if match:
-            return '命令执行出错'
+            return '命令执行出错 receive an error code:%s' % error
     return 'NULL'
+
+
+def read_temp_file(file_object=None):
+    """
+    读取临时文件信息
+    :param file_object:
+    :return:
+    """
+    data = file_object.read()  # read方法会读取临时文件中的内容，并随之销毁临时文件
+    final_data = data.decode() if isinstance(data, bytes) else data
+    print(f'read file info:{final_data}')
+
+
+def make_write_temp_file(content: str):
+    """
+    写入临时文件内容
+    :return:
+    """
+    _tmp_file = tempfile.TemporaryFile()  # 查看该类发现是以：w+b方式写入文件的，该模式支持热读写，并且要求写入格式是二进制
+    try:
+        print(_tmp_file.name)
+        # _tmp_file.write(b"something\n")
+        _tmp_file.write(content.encode("utf-8"))  # 需要写入二进制
+        _tmp_file.seek(0)
+        # 读取并销毁临时文件
+        read_temp_file(_tmp_file)
+    finally:
+        _tmp_file.close()  # 关闭文件资源
+
 
 # 测试部分
 if __name__ == '__main__':
-    print(ping_check('XXXXXXXX'))
+    make_write_temp_file("我是临时文件")
