@@ -83,7 +83,7 @@ def sendtoVx(title, content):  # 调用WX接口发送消息
         'Content-Type': 'application/json'
     }
     url = 'http://www.pushplus.plus/send'
-    token = '94f397f4a2ef4979afa5beaf9b2d8cb1'  # 在pushpush网站中可以找到
+    token = 'XXXX'  # 在pushpush网站中可以找到
     title = title  # 改成你要的标题内容
     content = content  # 改成你要的正文内容
     topic = '54412331'
