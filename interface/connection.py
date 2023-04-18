@@ -33,11 +33,12 @@ class deviceControl:  # 交换机登陆模块
 
     def connectDevice(self):  # 适用于连接路由，交换机。登录成功返回True
         times = 0
-        paramiko.util.log_to_file('paramiko.log')  # 调试日志
+        # paramiko.util.log_to_file('paramiko.log')  # 调试日志
         while True:  # 尝试3次登陆
             try:
                 self.ssh = paramiko.SSHClient()
-                self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                policy = paramiko.AutoAddPolicy()
+                self.ssh.set_missing_host_key_policy(policy)
                 self.ssh.connect(self.ip, self.port, self.username, self.password, timeout=200)
                 self.ssh_shell = self.ssh.invoke_shell()  # 使用invoke是为了可以执行多条命令
                 self.ssh_shell.settimeout(1)  # tunnel超时
@@ -59,7 +60,10 @@ class deviceControl:  # 交换机登陆模块
         times = 0  # 循环次数叠加
         while True:
             try:
-                rec = self.ssh_shell.recv(10240)
+                rec = self.ssh_shell.recv(1024)
+                # print(rec)
+                if bool(rec) is False:
+                    break
                 data += rec.decode('utf-8')
             except:
                 if data.endswith('---- More ----'):  # 判断末尾是否包含more，包含则发出3个空格
@@ -113,8 +117,6 @@ class deviceControl:  # 交换机登陆模块
 
     def telnetConnect(self):
         times = 0
-        # socket.setdefaulttimeout(300)
-        # socket.timeout(300)
         while True:
             try:
                 self.tn = Telnet(self.ip, port=23, timeout=10)
@@ -177,12 +179,12 @@ class deviceControl:  # 交换机登陆模块
             pass
 
 
-class deviceContrl_auto(deviceControl):  # 继承deviceControl的简洁登录 SSH TELNET合并
+class deviceControl_auto(deviceControl):  # 继承deviceControl的简洁登录 SSH TELNET合并
     def __init__(self, ip, username, password, port=22):  # 继承构造方法
         deviceControl.__init__(self, ip, username, password, port)
 
     def sendCmd_auto(self, cmd_list: list):  # 使用Telnet SSH 执行多条命令返回结果
-        cmd_local = cmd_list  # list
+        cmd_local = list(set(cmd_list))  # 去重复list
         result = {}  # 命令返回的结果
         ssh_login = deviceControl.connectDevice(self)  # 使用父类SSH登录
         if ssh_login:
@@ -229,11 +231,11 @@ def deleteUnknownStr(line_p):  # 删除垃圾字符，转义序列字符
 class excel:  # Excel表格处理 只支持.xlsx格式
     def __init__(self, filename):  # 初始化
         self.filename = filename  # 文件名 .xlsx
-        self.wb_obj = Workbook()  # 写入对象初始化
-        self.wb_obj.active
 
     # 写入数据
     def excel_write(self, title, data, sheetname='data01', sheetIndex=1):  # 一次性写入 data 格式为[[],[]]
+        self.wb_obj = Workbook()
+        self.wb_obj.active
         title_local = title  # 标题 list
         data_local = data
         sheetname_local = sheetname  # sheet名称
@@ -252,6 +254,8 @@ class excel:  # Excel表格处理 只支持.xlsx格式
                     wsObj.append(row)
 
     def excel_creat(self, title, sheetname='data01', sheetIndex=1):  # 创建对象并设置好列头
+        self.wb_obj = Workbook()
+        self.wb_obj.active
         title_local = title  # 标题 list
         sheetname_local = sheetname  # sheet名称
         sheetIndex_local = sheetIndex - 1  # sheet的位置 默认是第一张表 位置从0开始
@@ -267,7 +271,7 @@ class excel:  # Excel表格处理 只支持.xlsx格式
         self.wsobj.append(row_data)
 
     # 保存文件
-    def save_file(self):
+    def save_file(self):  # 保存文件
         timeNow = time.strftime('%Y-%m-%d_%H%M%S', time.localtime(time.time()))
         filename_save = self.filename.replace('.xlsx', '')
         filename_save = '%s_%s.xlsx' % (filename_save, timeNow)  # 返回文件名
@@ -278,11 +282,34 @@ class excel:  # Excel表格处理 只支持.xlsx格式
     # 读取数据 默认打开第一个sheet从第二行读
     def excel_read(self, sheetnum=1, row=0, column=0, row_start=2, column_start=1):
         file_local = self.filename
-        row_start_local = row_start  # 起始行
-        column_start_local = column_start  # 起始列
         wb = load_workbook(filename=file_local)  # 打开一个excel对象
         sheetnames = wb.sheetnames  # 获取sheets
         ws = wb[sheetnames[sheetnum - 1]]  # 打开第X个sheet
+        row_start_local = row_start  # 起始行
+        column_start_local = column_start  # 起始列
+        if row == 0:
+            row = ws.max_row  # 最大行
+        if column == 0:
+            column = ws.max_column  # 最大列
+        data_result = []  # 结果集
+        for rx in range(row_start_local, row + 1):  # 循环读取每一行sheet数据
+            info = []  # 一行的数据集
+            for cx in range(column_start_local, column + 1):  # 循环读取每一行的列数据
+                cell_info = ws.cell(row=rx, column=cx).value
+                info.append(cell_info)
+            data_result.append(info)
+        wb.close()  # 关闭
+        return data_result
+
+    def excelReadCread(self, ):  # 打开excel对象
+        file_local = self.filename
+        self.wb = load_workbook(filename=file_local)  # 打开一个excel对象
+
+    def excelReadSheet(self, sheetnum=1, row=0, column=0, row_start=2, column_start=1):  # 读取一个sheet
+        sheetnames = self.wb.sheetnames  # 获取sheets
+        ws = self.wb[sheetnames[sheetnum - 1]]  # 打开第X个sheet
+        row_start_local = row_start  # 起始行
+        column_start_local = column_start  # 起始列
         if row == 0:
             row = ws.max_row  # 行计数
         if column == 0:
@@ -294,9 +321,10 @@ class excel:  # Excel表格处理 只支持.xlsx格式
                 cell_info = ws.cell(row=rx, column=cx).value
                 info.append(cell_info)
             data_result.append(info)
-        wb.close()  # 关闭
-        self.wb_obj.close()  # 关闭
         return data_result
+
+    def excelClose(self):
+        self.wb.close()  # 关闭
 
 
 def readTxt(filename):  # 读取TXT 返回list 忽略#号
@@ -393,4 +421,4 @@ if __name__ == '__main__':
     # conn = deviceContrl_auto(ip, user, passwd)
     # res = conn.sendCmd_auto(cmds)
     # print(res)
-    readTxt('../read/Keywords.txt')
+    readTxt('../read/keyWords.txt')
