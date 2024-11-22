@@ -56,26 +56,28 @@ class deviceControl:  # 交换机登陆模块
         return status
 
     def recData(self):  # 接受返回数据
-        data = ''  # 定义一个变量用于返回数据
-        times = 0  # 循环次数叠加
+        dataAll = ''  # 定义一个变量用于返回数据
+        par = re.compile(r'---- More ----')
         while True:
-            try:
-                rec = self.ssh_shell.recv(1024)
-                # print(rec)
-                if bool(rec) is False:
-                    break
-                data += rec.decode('utf-8')
-            except:
-                if data.endswith('---- More ----'):  # 判断末尾是否包含more，包含则发出3个空格
-                    for i in range(2):  # 连续发三个空格
-                        self.ssh_shell.send(' ')
-                        time.sleep(0.5)
-                else:
+            data = ''
+            times = 0  # 循环次数叠加
+            while times <= 3:  # 取一次数据
+                try:
+                    rec = self.ssh_shell.recv(1024)
+                    if bool(rec) is False:
+                        raise ValueError
+                    data += rec.decode('utf-8')
+                    times = 0
+                except:
                     times += 1
-                    if times == 3:  # 超时次数=3的时候跳出循环
-                        break
-        data = deleteUnknownStr(data)  # 去掉转义字符
-        return data
+            if bool(data) is False:  # 获取的数据为空则跳出循环
+                break
+            else:  # 判断是否有more关键字
+                endMark = par.search(data)
+                if endMark:
+                    self.ssh_shell.send(' ')
+                dataAll += data
+        return deleteUnknownStr(dataAll)
 
     def close(self):  # 关闭session
         try:
